@@ -47,6 +47,12 @@ tar -xzf "$tarball" -C "$stage"
 shopt -s nullglob
 subdirs=("$stage"/*)
 shopt -u nullglob
+# A single symlinked entry would otherwise skip the flatten branch entirely and
+# be left in staging, where package() could copy it and later directory creation
+# (e.g. the licenses dir) could follow it to write outside $pkgdir. Reject it.
+if [[ "${#subdirs[@]}" -eq 1 && -L "${subdirs[0]}" ]]; then
+  die "refusing to flatten: wrapper entry is a symlink"
+fi
 if [[ "${#subdirs[@]}" -eq 1 && ! -L "${subdirs[0]}" && -d "${subdirs[0]}" ]]; then
   root="${subdirs[0]}"
   stage_real="$(realpath -- "$stage")"
@@ -107,11 +113,13 @@ else
 fi
 
 # The package name is derived from an archive-controlled .desktop basename and is
-# written into PKGBUILD (evaluated by makepkg as Bash). Validate it against Arch's
-# accepted identifier grammar so a crafted filename cannot inject shell code.
-# Arch pkgnames use lowercase alphanumerics plus @ . _ + - and may not start with
-# a hyphen or a dot.
-if [[ ! "$pkgname" =~ ^[a-z0-9@_+][a-z0-9@._+-]*$ ]]; then
+# written into PKGBUILD (evaluated by makepkg as Bash). Validate it against a safe
+# identifier grammar so a crafted filename cannot inject shell code. Freedesktop
+# application IDs may contain uppercase letters (e.g. org.gnome.Nautilus), which
+# makepkg also accepts, so uppercase is permitted; the value may not start with a
+# hyphen or a dot. The restricted character set plus printf %q below keeps the
+# value safe regardless of case.
+if [[ ! "$pkgname" =~ ^[a-zA-Z0-9@_+][a-zA-Z0-9@._+-]*$ ]]; then
   die "invalid package name derived from .desktop file: '$pkgname'"
 fi
 

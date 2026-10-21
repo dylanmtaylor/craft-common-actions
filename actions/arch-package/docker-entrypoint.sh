@@ -10,6 +10,15 @@ out_dir="${OUTPUT_DIR:-dist/release}"
 mkdir -p "$out_dir"
 chmod 777 "$out_dir"
 
+# Resolve inputs with defaults so a bare expansion never trips `set -u` when an
+# optional value is absent. These are plain data and are passed to the builder
+# through `env`; none are interpolated into shell source.
+tarball="${TARBALL:?TARBALL is required}"
+target_arch="${TARGET_ARCH:-x86_64}"
+arch_license="${ARCH_LICENSE:-MIT OR Apache-2.0}"
+pkgrel="${PKGREL:-1}"
+source_date_epoch="${SOURCE_DATE_EPOCH:-}"
+
 builder_home="$(getent passwd builder | cut -d: -f6)"
 builder_home="${builder_home:-/home/builder}"
 
@@ -24,23 +33,23 @@ run_as_builder() {
   if command -v runuser >/dev/null 2>&1; then
     runuser -u builder -- env \
       HOME="$builder_home" \
-      TARBALL="$TARBALL" \
-      TARGET_ARCH="$TARGET_ARCH" \
-      OUTPUT_DIR="$OUTPUT_DIR" \
-      ARCH_LICENSE="$ARCH_LICENSE" \
-      PKGREL="$PKGREL" \
-      SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
-      bash /action/arch-package.sh "$TARBALL" "$TARGET_ARCH" "$OUTPUT_DIR"
+      TARBALL="$tarball" \
+      TARGET_ARCH="$target_arch" \
+      OUTPUT_DIR="$out_dir" \
+      ARCH_LICENSE="$arch_license" \
+      PKGREL="$pkgrel" \
+      SOURCE_DATE_EPOCH="$source_date_epoch" \
+      bash /action/arch-package.sh "$tarball" "$target_arch" "$out_dir"
   else
     su builder -s /usr/bin/env -- \
       HOME="$builder_home" \
-      TARBALL="$TARBALL" \
-      TARGET_ARCH="$TARGET_ARCH" \
-      OUTPUT_DIR="$OUTPUT_DIR" \
-      ARCH_LICENSE="$ARCH_LICENSE" \
-      PKGREL="$PKGREL" \
-      SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
-      bash /action/arch-package.sh "$TARBALL" "$TARGET_ARCH" "$OUTPUT_DIR"
+      TARBALL="$tarball" \
+      TARGET_ARCH="$target_arch" \
+      OUTPUT_DIR="$out_dir" \
+      ARCH_LICENSE="$arch_license" \
+      PKGREL="$pkgrel" \
+      SOURCE_DATE_EPOCH="$source_date_epoch" \
+      bash /action/arch-package.sh "$tarball" "$target_arch" "$out_dir"
   fi
 }
 
