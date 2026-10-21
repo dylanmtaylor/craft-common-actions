@@ -22,7 +22,7 @@ runs:
       run: |
         version="$NFPM_VERSION"
         arch="$DEB_ARCH"
-        if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
           echo "::error::invalid nfpm-version '$version'"
           exit 1
         fi

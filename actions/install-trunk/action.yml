@@ -18,8 +18,10 @@ runs:
         version="$TRUNK_VERSION"
         # Restrict the version to a single safe release-tag component. This keeps
         # the value from carrying slashes or other URL path-traversal segments
-        # that could redirect downloads to an attacker-controlled repository.
-        if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+        # that could redirect downloads to an attacker-controlled repository. The
+        # bash regex anchors the whole string, so values containing a newline are
+        # rejected (unlike a line-oriented grep check).
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
           echo "::error::invalid trunk-version '$version'"
           exit 1
         fi
