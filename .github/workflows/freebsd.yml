@@ -71,6 +71,7 @@ jobs:
     env:
       CARGO_BUILD_EXTRA_ARGS: ${{ inputs.cargo-build-extra-args }}
       CARGO_TEST_EXTRA_ARGS: ${{ inputs.cargo-test-extra-args }}
+      CUSTOM_TEST_COMMAND: ${{ inputs.custom-test-command }}
       CARGO_HOME: /var/tmp/craft-cargo
       CARGO_TARGET_DIR: /var/tmp/craft-target
       CARGO_INCREMENTAL: 0
@@ -84,6 +85,15 @@ jobs:
           ref: ${{ inputs.craft-fonts-ref }}
       - name: Check out craft-i18n
         uses: storytold/craft-common-actions/actions/checkout-craft-i18n@main
+      # The architecture is interpolated into the guest's shell source below.
+      - name: Validate the architecture
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH" in
+            x86_64|aarch64) ;;
+            *) echo "::error::unsupported architecture '$ARCH' (use x86_64 or aarch64)"; exit 1 ;;
+          esac
       - name: Start the FreeBSD VM
         uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
         with:
@@ -94,7 +104,7 @@ jobs:
           cpu: 4
           mem: 12288
           copyback: false
-          envs: "CARGO_HOME CARGO_TARGET_DIR CARGO_INCREMENTAL CARGO_BUILD_JOBS CARGO_BUILD_EXTRA_ARGS CARGO_TEST_EXTRA_ARGS"
+          envs: "CARGO_HOME CARGO_TARGET_DIR CARGO_INCREMENTAL CARGO_BUILD_JOBS CARGO_BUILD_EXTRA_ARGS CARGO_TEST_EXTRA_ARGS CUSTOM_TEST_COMMAND"
           prepare: |
             # Keep rustup/proxies outside the Cargo data cache.
             unset CARGO_HOME CARGO_TARGET_DIR
@@ -226,9 +236,8 @@ jobs:
             elif [ "${{ inputs.custom-test-command != '' }}" = "true" ]; then
               # Isolate the command list: an early failure in an && chain must not
               # be hidden by a later successful packaging command in this script.
-              as_tester <<'CRAFT_CUSTOM_TESTS' || exit "$?"
-          ${{ inputs.custom-test-command }}
-          CRAFT_CUSTOM_TESTS
+              # The command text travels as data in the environment, never in this script's source.
+              printf '%s\n' "$CUSTOM_TEST_COMMAND" | as_tester || exit "$?"
             else
               as_tester <<'CRAFT_TESTS'
           CARGO_PROFILE_DEV_DEBUG=0 python3 - <<'PY'
