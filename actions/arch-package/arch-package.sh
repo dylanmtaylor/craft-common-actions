@@ -28,7 +28,7 @@ case "$target_arch" in
   x86_64) arch=x86_64 ;;
   aarch64|arm64) arch=aarch64 ;;
   riscv64) arch=riscv64 ;;
-  *) arch="$target_arch" ;;
+  *) die "unsupported architecture: '$target_arch'" ;;
 esac
 
 work="$(mktemp -d /tmp/arch-build.XXXXXX)"
@@ -101,6 +101,10 @@ if [[ "$upstream" != "$raw_version" ]]; then
 fi
 pkgver="${upstream//\~/}"
 pkgver="${pkgver//-/}"
+# pkgver, pkgrel and the license words are written into PKGBUILD, which makepkg sources as
+# Bash; the tarball name and the environment are not trusted to be shell-safe.
+[[ "$pkgver" =~ ^[A-Za-z0-9._+]+$ ]] || die "invalid version derived from archive: '$pkgver'"
+[[ "$pkgrel" =~ ^[0-9]+$ ]] || die "invalid PKGREL: '$pkgrel'"
 
 # Determine package name from .desktop file (bundle id)
 shopt -s nullglob
@@ -148,7 +152,9 @@ license_formatted=()
 IFS='|' read -ra parts <<< "$(sed -E 's/ (OR|AND) /|/g' <<< "$license")"
 for part in "${parts[@]}"; do
   part="$(echo "$part" | xargs)"
-  [[ -n "$part" ]] && license_formatted+=("'$part'")
+  [[ -z "$part" ]] && continue
+  [[ "$part" =~ ^[A-Za-z0-9.+-]+$ ]] || die "invalid license identifier: '$part'"
+  license_formatted+=("'$part'")
 done
 license_str="${license_formatted[*]}"
 
@@ -157,8 +163,8 @@ cat > "$work/makepkg.conf" <<EOF
 if [[ -f /etc/makepkg.conf ]]; then
   source /etc/makepkg.conf
 fi
-CARCH="$arch"
-CHOST="${arch}-unknown-linux-gnu"
+CARCH=$(printf '%q' "$arch")
+CHOST=$(printf '%q' "${arch}-unknown-linux-gnu")
 PKGEXT='.pkg.tar.zst'
 COMPRESSZST=(zstd -c -T0 --ultra -20 -)
 EOF
@@ -206,7 +212,11 @@ package() {
   find "\$pkgdir/usr" -type f -perm /111 -exec chmod 0755 {} +
   find "\$pkgdir/usr" -type f ! -perm /111 -exec chmod 0644 {} +
 
-  local lic_dir="\$pkgdir/usr/share/licenses/\$pkgname"
+  local lic_dir="\$pkgdir/usr/share/licenses/\$pkgname" d
+  # The archive's own symlinks were copied above; none may redirect the writes below.
+  for d in "\$pkgdir/usr" "\$pkgdir/usr/share" "\$pkgdir/usr/share/licenses" "\$lic_dir"; do
+    if [ -L "\$d" ]; then echo "error: refusing symlinked directory \$d" >&2; return 1; fi
+  done
   mkdir -p "\$lic_dir"
   if [ -d "\$pkgdir/usr/share/doc" ]; then
     find "\$pkgdir/usr/share/doc" -maxdepth 2 -type f \( -iname "*license*" -o -iname "*notice*" -o -iname "*copying*" \) -exec cp -t "\$lic_dir" {} + 2>/dev/null || true
