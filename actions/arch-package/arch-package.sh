@@ -104,7 +104,7 @@ pkgver="${pkgver//-/}"
 # pkgver, pkgrel and the license words are written into PKGBUILD, which makepkg sources as
 # Bash; the tarball name and the environment are not trusted to be shell-safe.
 [[ "$pkgver" =~ ^[A-Za-z0-9._+]+$ ]] || die "invalid version derived from archive: '$pkgver'"
-[[ "$pkgrel" =~ ^[0-9]+$ ]] || die "invalid PKGREL: '$pkgrel'"
+[[ "$pkgrel" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || die "invalid PKGREL: '$pkgrel'"
 
 # Determine package name from .desktop file (bundle id)
 shopt -s nullglob
@@ -152,7 +152,7 @@ license_formatted=()
 IFS='|' read -ra parts <<< "$(sed -E 's/ (OR|AND) /|/g' <<< "$license")"
 for part in "${parts[@]}"; do
   part="$(echo "$part" | xargs)"
-  [[ -z "$part" ]] && continue
+  [[ -n "$part" ]] || die "empty license component in '$license'"
   [[ "$part" =~ ^[A-Za-z0-9.+-]+$ ]] || die "invalid license identifier: '$part'"
   license_formatted+=("'$part'")
 done
